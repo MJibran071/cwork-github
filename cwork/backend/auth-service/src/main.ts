@@ -32,4 +32,5 @@ async function bootstrap() {
   await app.listen(port);
   loggingService.info(`Auth service running on port ${port}`, 'bootstrap');
 }
+// Bootstrap the application
 bootstrap();

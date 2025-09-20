@@ -1,0 +1,85 @@
+name: Security Scanning
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly on Sunday at midnight
+  pull_request:
+    branches: [ main, develop, release/* ]
+
+jobs:
+  sast-scan:
+    name: SAST Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Semgrep SAST scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/security-audit
+          output: semgrep-results.json
+          severity: ERROR
+
+      - name: Upload Semgrep results
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+
+  sca-scan:
+    name: SCA Scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [backend/auth-service, backend/marketplace-service, contracts, mobile-app]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (for JavaScript/TypeScript projects)
+        if: matrix.project == 'backend/auth-service' || matrix.project == 'backend/marketplace-service' || matrix.project == 'contracts'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        if: matrix.project == 'backend/auth-service' || matrix.project == 'backend/marketplace-service' || matrix.project == 'contracts'
+        run: cd ${{ matrix.project }} && npm ci
+
+      - name: Run npm audit
+        if: matrix.project == 'backend/auth-service' || matrix.project == 'backend/marketplace-service' || matrix.project == 'contracts'
+        run: cd ${{ matrix.project }} && npm audit --audit-level moderate
+
+      - name: Setup Flutter (for mobile project)
+        if: matrix.project == 'mobile-app'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.13.0'
+
+      - name: Run Flutter pub audit
+        if: matrix.project == 'mobile-app'
+        run: cd ${{ matrix.project }} && flutter pub audit
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan backend Dockerfiles
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'backend/auth-service/Dockerfile'
+          format: 'sarif'
+          output: 'trivy-results-backend.json'
+
+      - name: Upload Trivy results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: trivy-results-backend.json

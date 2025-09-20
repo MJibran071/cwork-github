@@ -1,0 +1,29 @@
+{
+  "name": "cwork-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for Cwork freelance crypto escrow platform",
+  "main": "index.js",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy:testnet": "npx hardhat run scripts/deploy.js --network testnet",
+    "deploy:mainnet": "npx hardhat run scripts/deploy.js --network mainnet",
+    "deploy:polygon-testnet": "npx hardhat run scripts/deploy-polygon.js --network polygonTestnet",
+    "deploy:polygon-mainnet": "npx hardhat run scripts/deploy-polygon.js --network polygonMainnet",
+    "deploy:bsc-testnet": "npx hardhat run scripts/deploy-bsc.js --network bscTestnet",
+    "deploy:bsc-mainnet": "npx hardhat run scripts/deploy-bsc.js --network bscMainnet",
+    "node": "npx hardhat node",
+    "verify": "npx hardhat verify"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "hardhat": "^2.19.0",
+    "hardhat-deploy": "^0.11.34"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.3",
+    "dotenv": "^16.3.1"
+  }
+}

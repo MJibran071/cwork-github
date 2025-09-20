@@ -1,0 +1,47 @@
+name: cwork_mobile
+description: A freelance crypto escrow platform mobile app.
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  http: ^1.1.0
+  provider: ^6.1.1
+  web3dart: ^2.5.0
+  # wallet_connect_dart: ^1.0.0  # Temporarily commented out for web compatibility
+  shared_preferences: ^2.2.2
+  flutter_dotenv: ^5.1.0
+  url_launcher: ^6.2.0
+  qr_code_scanner: ^1.0.1
+  web_socket_channel: ^2.4.0
+  crypto: ^3.0.3
+  # eth_sig_util: ^0.1.0  # Temporarily commented out for web compatibility
+  google_sign_in: ^6.1.0
+  font_awesome_flutter: ^11.0.0  # For social media icons
+  flutter_svg: ^2.0.7  # For optimized SVG assets
+  local_auth: ^2.1.5  # For biometric authentication (Touch ID/Face ID)
+  flutter_secure_storage: ^8.0.0  # For secure storage of sensitive data
+  shadcn_ui: ^0.31.7
+  equatable: ^2.0.5
+  bloc: ^8.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  integration_test:
+    sdk: flutter
+  mockito: ^5.4.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/images/
+    - assets/icons/
+    - assets/svg/

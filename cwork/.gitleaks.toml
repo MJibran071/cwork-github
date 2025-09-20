@@ -1,0 +1,49 @@
+title = "Cwork Gitleaks Configuration"
+version = "2.0.0"
+description = "Custom secret detection rules for Cwork project"
+
+[[rules]]
+id = "cwork-jwt-secret"
+description = "Cwork JWT Secret Pattern"
+regex = '''(?i)(jwt[_-]?secret|jwt[_-]?key|jwt[_-]?signature)[\s:=]+['"]?([a-zA-Z0-9_\-]{20,})['"]?'''
+tags = ["jwt", "secret", "cwork"]
+
+[[rules]]
+id = "cwork-database-password"
+description = "Cwork Database Password Pattern"
+regex = '''(?i)(db[_-]?password|database[_-]?password|postgres[_-]?password)[\s:=]+['"]?([a-zA-Z0-9_\-]{8,})['"]?'''
+tags = ["database", "password", "postgres"]
+
+[[rules]]
+id = "cwork-private-key"
+description = "Cwork Private Key Pattern"
+regex = '''(?i)(private[_-]?key|eth[_-]?private[_-]?key|solana[_-]?private[_-]?key)[\s:=]+['"]?([a-zA-Z0-9_\-]{40,})['"]?'''
+tags = ["blockchain", "private-key", "crypto"]
+
+[[rules]]
+id = "cwork-api-key"
+description = "Cwork API Key Pattern"
+regex = '''(?i)(api[_-]?key|openai[_-]?api[_-]?key|infura[_-]?project[_-]?id)[\s:=]+['"]?([a-zA-Z0-9_\-]{20,})['"]?'''
+tags = ["api", "key", "third-party"]
+
+[[rules]]
+id = "cwork-email-password"
+description = "Cwork Email Password Pattern"
+regex = '''(?i)(smtp[_-]?pass|email[_-]?password|mail[_-]?password)[\s:=]+['"]?([a-zA-Z0-9_\-]{8,})['"]?'''
+tags = ["email", "password", "smtp"]
+
+# Allowlist common false positives or example patterns
+[[allowlist]]
+description = "Allow example patterns in .env.example files"
+paths = [".env.example"]
+
+[[allowlist]]
+description = "Allow common test values"
+regexes = [
+    '''postgres://postgres:postgres@''',
+    '''password=password''',
+    '''test-jwt-secret-for-ci''',
+    '''your-.*-here''',
+    '''example.*''',
+    '''placeholder.*'''
+]

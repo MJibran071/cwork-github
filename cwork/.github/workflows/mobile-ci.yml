@@ -1,0 +1,104 @@
+name: Mobile App CI with Vault Secrets
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Ephemeral runner is default in GitHub Actions
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.13.0'
+
+      - name: Authenticate with Vault
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          method: jwt
+          secrets: |
+            secret/data/mobile/app api_key, encryption_key, backend_url | mobileEnv ;
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: mobile-app
+
+      - name: Run tests
+        run: flutter test
+        env:
+          API_KEY: ${{ steps.vault.outputs.api_key }}
+          ENCRYPTION_KEY: ${{ steps.vault.outputs.encryption_key }}
+          BACKEND_URL: ${{ steps.vault.outputs.backend_url }}
+        working-directory: mobile-app
+
+      - name: Generate SBOM for mobile app
+        uses: anchore/sbom-action@v0
+        with:
+          path: mobile-app
+          output-file: sbom-mobile-app.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-mobile
+          path: sbom-mobile-app.spdx.json
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.13.0'
+
+      - name: Authenticate with Vault
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          method: jwt
+          secrets: |
+            secret/data/mobile/app api_key, encryption_key, backend_url | mobileEnv ;
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: mobile-app
+
+      - name: Build Android app
+        run: flutter build apk --release
+        env:
+          API_KEY: ${{ steps.vault.outputs.api_key }}
+          ENCRYPTION_KEY: ${{ steps.vault.outputs.encryption_key }}
+          BACKEND_URL: ${{ steps.vault.outputs.backend_url }}
+        working-directory: mobile-app
+
+      - name: Generate SBOM for built app
+        uses: anchore/sbom-action@v0
+        with:
+          path: mobile-app/build
+          output-file: sbom-mobile-build.spdx.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-build
+          path: mobile-app/build/app/outputs/apk/release/app-release.apk
+
+      - name: Upload SBOM for build
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-mobile-build
+          path: sbom-mobile-build.spdx.json

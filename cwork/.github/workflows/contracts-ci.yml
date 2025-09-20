@@ -1,0 +1,106 @@
+name: Contracts CI with Vault Secrets
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Ephemeral runner is default in GitHub Actions
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Authenticate with Vault for test environment
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          method: jwt
+          secrets: |
+            secret/data/contracts/ethereum-test private_key, alchemy_key, infura_key | ethereumEnv ;
+            secret/data/cicd/common npm_token | NPM_TOKEN ;
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NPM_TOKEN: ${{ steps.vault.outputs.NPM_TOKEN }}
+        working-directory: contracts
+
+      - name: Run tests
+        run: npm test
+        env:
+          PRIVATE_KEY: ${{ steps.vault.outputs.private_key }}
+          ALCHEMY_KEY: ${{ steps.vault.outputs.alchemy_key }}
+          INFURA_KEY: ${{ steps.vault.outputs.infura_key }}
+        working-directory: contracts
+
+      - name: Generate SBOM for contracts
+        uses: anchore/sbom-action@v0
+        with:
+          path: contracts
+          output-file: sbom-contracts.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-contracts
+          path: sbom-contracts.spdx.json
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    # Note: Deployment job has network access but is isolated from other environments
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Authenticate with Vault for deployment
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          method: jwt
+          secrets: |
+            secret/data/contracts/ethereum private_key, alchemy_key, infura_key | ethereumEnv ;
+            secret/data/cicd/common npm_token | NPM_TOKEN ;
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NPM_TOKEN: ${{ steps.vault.outputs.NPM_TOKEN }}
+        working-directory: contracts
+
+      - name: Deploy contracts
+        run: npx hardhat run scripts/deploy.js --network mainnet
+        env:
+          PRIVATE_KEY: ${{ steps.vault.outputs.private_key }}
+          ALCHEMY_KEY: ${{ steps.vault.outputs.alchemy_key }}
+          INFURA_KEY: ${{ steps.vault.outputs.infura_key }}
+        working-directory: contracts
+
+      - name: Generate SBOM for deployed contracts
+        uses: anchore/sbom-action@v0
+        with:
+          path: contracts
+          output-file: sbom-contracts-deployed.spdx.json
+
+      - name: Upload deployment SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-contracts-deployed
+          path: sbom-contracts-deployed.spdx.json

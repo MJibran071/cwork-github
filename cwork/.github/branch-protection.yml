@@ -1,0 +1,88 @@
+# Cwork Branch Protection Configuration
+# This file documents the branch protection rules that should be applied to the repository
+# These rules can be configured manually in GitHub Settings -> Branches -> Branch protection rules
+
+default_branch: main
+
+protected_branches:
+  - name: main
+    protection_rules:
+      - require_pull_request_reviews: true
+        required_approving_review_count: 1
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: false
+        required_reviewer_count: 0
+
+      - require_status_checks: true
+        required_status_checks:
+          - context: "backend-ci / test"
+          - context: "contracts-ci / test"
+          - context: "mobile-ci / test"
+          - context: "secret-scanning / secrets-scan"
+        strict: true
+
+      - require_signed_commits: true
+        require_linear_history: true
+
+      - restrictions: null  # No user/team restrictions
+        allow_force_pushes: false
+        allow_deletions: false
+        lock_branch: false
+        allow_fork_syncing: true
+
+  - name: develop
+    protection_rules:
+      - require_pull_request_reviews: true
+        required_approving_review_count: 1
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: false
+        required_reviewer_count: 0
+
+      - require_status_checks: true
+        required_status_checks:
+          - context: "backend-ci / test"
+          - context: "contracts-ci / test"
+          - context: "mobile-ci / test"
+        strict: true
+
+      - require_signed_commits: true
+        require_linear_history: true
+
+      - restrictions: null
+        allow_force_pushes: false
+        allow_deletions: false
+        lock_branch: false
+        allow_fork_syncing: true
+
+# Additional rules for release branches
+release_branches_pattern: "release/*"
+release_protection_rules:
+  - require_pull_request_reviews: true
+    required_approving_review_count: 2
+    dismiss_stale_reviews: true
+    require_code_owner_reviews: true
+
+  - require_status_checks: true
+    required_status_checks:
+      - context: "backend-ci / test"
+      - context: "contracts-ci / test"
+      - context: "mobile-ci / test"
+      - context: "secret-scanning / secrets-scan"
+      - context: "security-scanning / security-scan"
+    strict: true
+
+  - require_signed_commits: true
+    require_linear_history: true
+
+  - restrictions: null
+    allow_force_pushes: false
+    allow_deletions: false
+    lock_branch: true
+
+# Implementation instructions:
+# 1. Go to GitHub repository Settings -> Branches
+# 2. Add branch protection rule for each protected branch pattern
+# 3. Configure the rules as specified above
+# 4. Save the protection rules
+
+# Note: Some rules may require GitHub Enterprise or specific permissions

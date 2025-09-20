@@ -1,0 +1,242 @@
+name: Backend CI with Vault Secrets
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Ephemeral runner is default in GitHub Actions
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Authenticate with Vault for test environment
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          method: jwt
+          secrets: |
+            secret/data/backend/auth-test db_host, db_user, db_pass, jwt_secret | authEnv ;
+            secret/data/cicd/common npm_token | NPM_TOKEN ;
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NPM_TOKEN: ${{ steps.vault.outputs.NPM_TOKEN }}
+        working-directory: backend/auth-service
+
+      - name: Run tests
+        run: npm test
+        env:
+          DB_HOST: ${{ steps.vault.outputs.db_host }}
+          DB_USER: ${{ steps.vault.outputs.db_user }}
+          DB_PASS: ${{ steps.vault.outputs.db_pass }}
+          JWT_SECRET: ${{ steps.vault.outputs.jwt_secret }}
+        working-directory: backend/auth-service
+
+      - name: Run marketplace service tests
+        run: npm test
+        env:
+          DB_HOST: ${{ steps.vault.outputs.db_host }}
+          DB_USER: ${{ steps.vault.outputs.db_user }}
+          DB_PASS: ${{ steps.vault.outputs.db_pass }}
+        working-directory: backend/marketplace-service
+
+      - name: Generate SBOM for auth service
+        uses: anchore/sbom-action@v0
+        with:
+          path: backend/auth-service
+          output-file: sbom-auth-service.spdx.json
+
+      - name: Generate SBOM for marketplace service
+        uses: anchore/sbom-action@v0
+        with:
+          path: backend/marketplace-service
+          output-file: sbom-marketplace-service.spdx.json
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend
+          path: |
+            sbom-auth-service.spdx.json
+            sbom-marketplace-service.spdx.json
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    # Ensure no production network access during build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Authenticate with Vault for build environment
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          method: jwt
+          secrets: |
+            secret/data/cicd/common npm_token | NPM_TOKEN ;
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NPM_TOKEN: ${{ steps.vault.outputs.NPM_TOKEN }}
+        working-directory: backend/auth-service
+
+      - name: Build auth service
+        run: npm run build
+        working-directory: backend/auth-service
+
+      - name: Build marketplace service
+        run: npm run build
+        working-directory: backend/marketplace-service
+
+      - name: Generate SBOM for built artifacts
+        uses: anchore/sbom-action@v0
+        with:
+          path: backend/auth-service/dist
+          output-file: sbom-auth-service-build.spdx.json
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: |
+            backend/auth-service/dist/
+            backend/marketplace-service/dist/
+
+      - name: Upload SBOM for build
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend-build
+          path: sbom-auth-service-build.spdx.json
+
+  container-scan:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build auth service container image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend/auth-service
+          tags: |
+            ghcr.io/${{ github.repository }}/auth-service:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/auth-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/auth-service.tar
+
+      - name: Build marketplace service container image
+        uses: docker/build-push-action@v5
+        with:
+          context: backend/marketplace-service
+          tags: |
+            ghcr.io/${{ github.repository }}/marketplace-service:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/marketplace-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/marketplace-service.tar
+
+      - name: Scan auth service image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: /tmp/auth-service.tar
+          format: 'sarif'
+          output: 'trivy-results-auth-service.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Scan marketplace service image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: /tmp/marketplace-service.tar
+          format: 'sarif'
+          output: 'trivy-results-marketplace-service.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload vulnerability scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-results
+          path: |
+            trivy-results-auth-service.sarif
+            trivy-results-marketplace-service.sarif
+
+      - name: Fail on critical vulnerabilities
+        run: |
+          if [ -s trivy-results-auth-service.sarif ] || [ -s trivy-results-marketplace-service.sarif ]; then
+            echo "Critical vulnerabilities found in container images. Failing build."
+            exit 1
+          fi
+
+  sign-images:
+    runs-on: ubuntu-latest
+    needs: container-scan
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Cosign
+        uses: sigstore/cosign-installer@v3.1.1
+
+      - name: Authenticate with Vault for Cosign keys
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: ${{ secrets.VAULT_URL }}
+          method: jwt
+          secrets: |
+            secret/data/cicd/cosign private_key, password | cosignEnv ;
+
+      - name: Import Cosign private key
+        run: |
+          echo "${{ steps.vault.outputs.private_key }}" > cosign.key
+          chmod 600 cosign.key
+
+      - name: Sign auth service image
+        run: |
+          cosign sign --key cosign.key --yes ghcr.io/${{ github.repository }}/auth-service:${{ github.sha }}
+        env:
+          COSIGN_PASSWORD: ${{ steps.vault.outputs.password }}
+
+      - name: Sign marketplace service image
+        run: |
+          cosign sign --key cosign.key --yes ghcr.io/${{ github.repository }}/marketplace-service:${{ github.sha }}
+        env:
+          COSIGN_PASSWORD: ${{ steps.vault.outputs.password }}
+
+      - name: Verify signatures
+        run: |
+          cosign verify --key cosign.key ghcr.io/${{ github.repository }}/auth-service:${{ github.sha }}
+          cosign verify --key cosign.key ghcr.io/${{ github.repository }}/marketplace-service:${{ github.sha }}
+
+      - name: Upload signature artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosign-signatures
+          path: |
+            cosign.key

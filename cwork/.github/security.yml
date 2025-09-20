@@ -1,0 +1,44 @@
+# GitHub Organization Security Policy
+# This configuration enforces security settings at the organization level
+
+# Require two-factor authentication for all organization members
+require_two_factor_authentication: true
+
+# Default repository permissions
+default_repository_permission: read
+
+# Allowed repository creation permissions
+members_can_create_public_repositories: false
+members_can_create_private_repositories: false
+members_can_create_internal_repositories: false
+
+# Repository visibility settings
+members_can_change_repository_visibility: false
+
+# Forking permissions
+members_can_fork_private_repositories: false
+
+# Webhook configuration
+web_commit_signoff_required: true
+
+# GitHub Actions permissions
+allowed_actions: local_only
+github_owned_allowed: false
+verified_allowed: false
+patterns_allowed: []
+
+# Advanced security settings
+advanced_security_enabled_for_new_repositories: true
+dependabot_alerts_enabled_for_new_repositories: true
+dependabot_security_updates_enabled_for_new_repositories: true
+secret_scanning_enabled_for_new_repositories: true
+secret_scanning_push_protection_enabled_for_new_repositories: true
+
+# Implementation instructions:
+# 1. Go to GitHub Organization Settings -> Security
+# 2. Enable "Require two-factor authentication"
+# 3. Set default repository permissions to "Read"
+# 4. Configure repository creation permissions as needed
+# 5. Apply these settings to all existing members
+
+# Note: Some settings may require GitHub Enterprise plan

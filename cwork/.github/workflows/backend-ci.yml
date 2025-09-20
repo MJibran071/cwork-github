@@ -7,8 +7,26 @@ on:
     branches: [ main, develop ]
 
 jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for full git history for CodeRabbit
+
+      - name: Run CodeRabbit review
+        uses: coderabbitai/ai-pr-reviewer@latest
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          review_type: all
+          output_format: plain
+          # Additional configuration can be added here
+          # For example: ignore_paths: "**/node_modules/**,**/dist/**"
+
   test:
     runs-on: ubuntu-latest
+    needs: code-review
     # Ephemeral runner is default in GitHub Actions
     steps:
       - name: Checkout code
